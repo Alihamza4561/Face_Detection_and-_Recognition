@@ -1,20 +1,3 @@
-"""
-02_collect_students.py
------------------------
-Collect face images for each student.
-
-Run once per student. Saves color face crops to:
-    dataset/students/<name>/0000.jpg ...
-
-Usage:
-    python 02_collect_students.py
-    python 02_collect_students.py --samples 80 --source 0
-
-Tips for best results:
-  - Ask student to slowly turn head left/right/up/down
-  - Vary lighting if possible
-  - 50-100 images per student is enough (transfer learning handles the rest)
-"""
 
 import os
 import cv2
@@ -24,7 +7,7 @@ import argparse
 FACE_CASCADE = cv2.CascadeClassifier(
     cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 )
-IMG_SIZE = 160  # matches training size
+IMG_SIZE = 160
 
 
 def collect(name: str, samples: int, source, dataset_dir: str):
@@ -67,9 +50,8 @@ def collect(name: str, samples: int, source, dataset_dir: str):
                 last_saved = time.time()
 
             cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-            break  # one face per frame
+            break 
 
-        # Progress bar
         progress = int((count / samples) * 30)
         bar      = "█" * progress + "░" * (30 - progress)
         cv2.putText(frame, f"{name}: [{bar}] {count}/{samples}",
