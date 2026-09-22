@@ -1,29 +1,3 @@
-"""
-04_attendance.py
------------------
-Real-time attendance system using the fine-tuned student model.
-
-Recognition strategy — TWO parallel checks for maximum accuracy:
-  1. CNN softmax score  → confidence that face belongs to a student class
-  2. Embedding distance → how close the face is to the student's stored embeddings
-
-Both must agree before marking attendance (reduces false positives significantly).
-
-Features:
-  - Handles MULTIPLE faces simultaneously in one frame (full classroom)
-  - Marks attendance once per student per day in CSV
-  - Shows live confidence score on screen
-  - Works with webcam OR ESP32-CAM stream
-
-Usage:
-    python 04_attendance.py
-    python 04_attendance.py --source "http://192.168.1.50/stream"
-
-Tune these if recognition is off:
-    CNN_THRESHOLD   = 0.75    lower → more permissive, higher → stricter
-    EMBED_THRESHOLD = 0.55    lower → stricter distance matching
-"""
-
 import os
 import csv
 import json
@@ -37,16 +11,15 @@ import numpy as np
 import tensorflow as tf
 
 IMG_SIZE         = 160
-CNN_THRESHOLD    = 0.75   # min softmax confidence
-EMBED_THRESHOLD  = 0.55   # max embedding distance (lower = stricter)
-SMOOTH_FRAMES    = 8      # frames to smooth predictions over
+CNN_THRESHOLD    = 0.75   
+EMBED_THRESHOLD  = 0.55   
+SMOOTH_FRAMES    = 8   
 
 FACE_CASCADE = cv2.CascadeClassifier(
     cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 )
 
 
-# ── Attendance Logging ─────────────────────────────────────────────────────
 def mark_attendance(name: str, attendance_dir: str = "attendance") -> bool:
     os.makedirs(attendance_dir, exist_ok=True)
     today     = datetime.now().strftime("%Y-%m-%d")
@@ -73,7 +46,6 @@ def mark_attendance(name: str, attendance_dir: str = "attendance") -> bool:
     return True
 
 
-# ── Model Loading ──────────────────────────────────────────────────────────
 def load_models():
     required = [
         "models/student_model.keras",
@@ -111,7 +83,6 @@ def load_models():
     return model, encoder, label_names, known_encodings, known_names
 
 
-# ── Recognition ────────────────────────────────────────────────────────────
 def predict_face(face_bgr, model, encoder, label_names, known_encodings, known_names):
     """
     Returns (name, confidence) using dual CNN + embedding check.
@@ -121,13 +92,11 @@ def predict_face(face_bgr, model, encoder, label_names, known_encodings, known_n
     inp      = face_rgb.astype("float32") / 255.0
     inp      = np.expand_dims(inp, axis=0)
 
-    # ── CNN softmax prediction ─────────────────────────────────────────────
     preds      = model.predict(inp, verbose=0)[0]
     cnn_idx    = int(np.argmax(preds))
     cnn_conf   = float(preds[cnn_idx])
     cnn_name   = label_names[cnn_idx] if cnn_conf >= CNN_THRESHOLD else "Unknown"
 
-    # ── Embedding distance check ───────────────────────────────────────────
     embedding  = encoder.predict(inp, verbose=0)[0]
     distances  = [
         float(np.linalg.norm(embedding - known_enc))
@@ -137,18 +106,16 @@ def predict_face(face_bgr, model, encoder, label_names, known_encodings, known_n
     best_idx   = int(np.argmin(distances))
     embed_name = known_names[best_idx] if best_dist < EMBED_THRESHOLD else "Unknown"
 
-    # ── Dual agreement ────────────────────────────────────────────────────
     if cnn_name != "Unknown" and embed_name != "Unknown" and cnn_name == embed_name:
-        return cnn_name, cnn_conf           # both agree → high confidence
+        return cnn_name, cnn_conf          
     elif cnn_name != "Unknown" and embed_name == "Unknown":
-        return "Unknown", cnn_conf          # only CNN is sure, but embedding disagrees
+        return "Unknown", cnn_conf        
     elif cnn_name == embed_name == "Unknown":
         return "Unknown", 0.0
     else:
-        return "Unknown", 0.0              # names don't match → reject
+        return "Unknown", 0.0             
 
 
-# ── Main Loop ─────────────────────────────────────────────────────────────
 def run(args):
     model, encoder, label_names, known_encodings, known_names = load_models()
 
@@ -165,8 +132,8 @@ def run(args):
     print(f"\n[INFO] Attendance system running. Press Q to quit.\n")
 
     marked_today    = set()
-    pred_buffers    = defaultdict(list)   # smoothing per face position
-    flash_messages  = []                  # "Marked!" flash on screen
+    pred_buffers    = defaultdict(list)   
+    flash_messages  = []                 
 
     while True:
         ret, frame = cap.read()
@@ -185,7 +152,6 @@ def run(args):
                 label_names, known_encodings, known_names
             )
 
-            # Smooth over last N frames
             bucket = (x // 80, y // 80)
             pred_buffers[bucket].append(name)
             if len(pred_buffers[bucket]) > SMOOTH_FRAMES:
@@ -193,34 +159,29 @@ def run(args):
 
             smoothed = Counter(pred_buffers[bucket]).most_common(1)[0][0]
 
-            # Colors
             if smoothed != "Unknown":
                 color = (0, 220, 0)
             else:
                 color = (0, 0, 220)
 
-            # Draw bounding box
+        
             cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
 
-            # Label background
             label   = f"{smoothed} ({conf*100:.0f}%)" if smoothed != "Unknown" else "Unknown"
             txt_sz  = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)[0]
             cv2.rectangle(frame, (x, y-30), (x + txt_sz[0] + 8, y), color, cv2.FILLED)
             cv2.putText(frame, label, (x+4, y-8),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
 
-            # Mark attendance
             if smoothed != "Unknown" and smoothed not in marked_today:
                 if mark_attendance(smoothed, args.attendance_dir):
                     marked_today.add(smoothed)
                     flash_messages.append((f"✓ {smoothed} — Attendance Marked!", 60))
 
-        # Attendance counter
         cv2.rectangle(frame, (0, 0), (320, 40), (30, 30, 30), cv2.FILLED)
         cv2.putText(frame, f"Present today: {len(marked_today)} students",
                     (8, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 180), 2)
 
-        # Flash messages
         y_offset = 80
         updated_flash = []
         for msg, frames_left in flash_messages:
