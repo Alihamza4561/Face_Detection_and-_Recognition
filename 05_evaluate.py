@@ -1,16 +1,3 @@
-"""
-05_evaluate.py
----------------
-Evaluates the trained student model and generates:
-  - Accuracy report per student
-  - Confusion matrix heatmap
-  - Training loss/accuracy curves (from CSV logs)
-  - Summary stats for report/patent documentation
-
-Usage:
-    python 05_evaluate.py
-"""
-
 import os
 import json
 import pickle
@@ -19,7 +6,7 @@ import pandas as pd
 import cv2
 import tensorflow as tf
 import matplotlib
-matplotlib.use("Agg")   # non-interactive backend for saving to file
+matplotlib.use("Agg")   
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import (
@@ -59,7 +46,6 @@ def evaluate_model(model, label_names, data_dir="dataset/students"):
 
     os.makedirs("evaluation", exist_ok=True)
 
-    # ── Confusion Matrix ──────────────────────────────────────────────────
     cm = confusion_matrix(y_true, y_pred)
     fig, ax = plt.subplots(figsize=(max(10, len(idx_names)), max(8, len(idx_names)-2)))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
@@ -78,7 +64,6 @@ def evaluate_model(model, label_names, data_dir="dataset/students"):
 
 
 def plot_training_curves():
-    """Plot loss/accuracy from the CSV logs saved during training."""
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     fig.suptitle("Training History — Student Fine-Tuning", fontsize=14)
 
@@ -117,7 +102,6 @@ def plot_training_curves():
 
 
 def generate_report(acc, label_names):
-    """Generate a summary text report."""
     report = f"""
 FACE RECOGNITION ATTENDANCE SYSTEM
 Evaluation Report
