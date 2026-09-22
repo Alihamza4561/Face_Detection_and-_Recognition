@@ -1,24 +1,3 @@
-"""
-00_download_vggface2.py
-------------------------
-Downloads and prepares the VGGFace2 dataset for training.
-
-VGGFace2 requires registration at:
-https://www.robots.ox.ac.uk/~vgg/data/vgg_face2/
-
-Once you have downloaded the dataset manually, place the files as:
-    vggface2_data/
-        train/          <- extracted training set
-        test/           <- extracted test set
-
-Then run this script to prepare a subset for faster training:
-    python 00_download_vggface2.py --people 500 --images_per_person 50
-
-Why subset?
-- Full VGGFace2 = 9,131 people, 3.3M images → needs days to train
-- 500 people × 50 images = 25,000 images → trains in hours on CPU, minutes on GPU
-- Still teaches the CNN rich, diverse face features
-"""
 
 import os
 import shutil
@@ -42,21 +21,7 @@ def prepare_subset(
     if not vgg_path.exists():
         print(f"""
 [ERROR] VGGFace2 train directory not found at: {vgg_train_dir}
-
-To get VGGFace2:
-1. Go to: https://www.robots.ox.ac.uk/~vgg/data/vgg_face2/
-2. Fill out the request form (academic/research use)
-3. You will receive a download link via email
-4. Download and extract so the structure is:
-       vggface2_data/train/n000001/  (person folders)
-       vggface2_data/train/n000002/
-       ...
-5. Re-run this script
-
-Alternative faster option — MS-Celeb subset:
-   pip install gdown
-   gdown https://drive.google.com/uc?id=<shared-id>   (search for ms-celeb-1m subset on GitHub)
-        """)
+""")
         return
 
     all_people = sorted([p for p in vgg_path.iterdir() if p.is_dir()])
