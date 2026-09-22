@@ -1,28 +1,3 @@
-"""
-03_finetune_students.py
-------------------------
-Stage 2: Fine-tune the VGGFace2-trained CNN on your 80 students.
-
-What happens:
-  1. Load the encoder trained on VGGFace2 (already knows face features)
-  2. FREEZE the Conv layers (keep VGGFace2 knowledge)
-  3. Add a new classification head for YOUR students
-  4. Train only the new head first (fast, avoids forgetting)
-  5. UNFREEZE last Conv block and fine-tune everything together (slow but accurate)
-
-This two-phase approach is critical:
-  Phase 1 → new head learns student identities quickly
-  Phase 2 → Conv layers adapt to your specific students/camera/lighting
-
-Output:
-  models/student_model.keras     <- full fine-tuned model
-  models/student_labels.json     <- maps class index → student name
-  models/student_encodings.pkl   <- precomputed embeddings for fast recognition
-
-Usage:
-    python 03_finetune_students.py --epochs_head 15 --epochs_full 20
-"""
-
 import os
 import json
 import pickle
@@ -35,7 +10,7 @@ from sklearn.preprocessing import LabelEncoder
 
 
 IMG_SIZE   = 160
-BATCH_SIZE = 16   # small — student dataset is small
+BATCH_SIZE = 16   
 EMBED_DIM  = 128
 
 
@@ -51,16 +26,12 @@ def load_encoder():
 
 
 def build_student_model(encoder, num_students: int):
-    """
-    Attach a new classification head on top of the VGGFace2 encoder.
-    """
-    # Freeze encoder initially
+  
     encoder.trainable = False
 
     inputs    = encoder.input
-    embedding = encoder.output   # 128-d L2 normalized vector
+    embedding = encoder.output  
 
-    # New head for students
     x = layers.Dense(256, activation="relu", name="student_dense1")(embedding)
     x = layers.Dropout(0.4)(x)
     x = layers.Dense(128, activation="relu", name="student_dense2")(x)
@@ -112,13 +83,9 @@ def build_generators(data_dir: str):
 
 
 def save_encodings(model, data_dir: str, label_names: list):
-    """
-    Precompute and save face embeddings for all student images.
-    Used during recognition for fast comparison.
-    """
+    
     print("\n[INFO] Precomputing student face embeddings...")
 
-    # Extract just the encoder part (up to l2_norm layer)
     encoder_only = models.Model(
         inputs=model.input,
         outputs=model.get_layer("l2_norm").output
@@ -150,9 +117,7 @@ def save_encodings(model, data_dir: str, label_names: list):
             encoding = encoder_only.predict(img_arr, verbose=0)[0]
             student_encodings.append(encoding)
 
-        # Use mean encoding of all images as the student's representative embedding
         mean_encoding = np.mean(student_encodings, axis=0)
-        # Re-normalize after averaging
         mean_encoding = mean_encoding / np.linalg.norm(mean_encoding)
 
         all_encodings.append(mean_encoding)
@@ -179,8 +144,6 @@ def train(args):
     model   = build_student_model(encoder, num_students)
 
     os.makedirs("models", exist_ok=True)
-
-    # ── Phase 1: Train head only (encoder frozen) ──────────────────────────
     print(f"\n{'='*60}")
     print("PHASE 1: Training new student head (encoder frozen)")
     print(f"{'='*60}")
@@ -202,23 +165,20 @@ def train(args):
             callbacks.CSVLogger("models/phase1_log.csv"),
         ],
     )
-
-    # ── Phase 2: Unfreeze last conv block + fine-tune ─────────────────────
     print(f"\n{'='*60}")
     print("PHASE 2: Fine-tuning (last conv block unfrozen)")
     print(f"{'='*60}")
 
-    # Unfreeze last conv block (conv4) and everything after
     encoder.trainable = True
     for layer in model.layers:
-        if hasattr(layer, "layers"):  # it's the encoder sub-model
+        if hasattr(layer, "layers"):  
             for enc_layer in layer.layers:
                 enc_layer.trainable = enc_layer.name.startswith(
                     ("conv4", "bn4", "gap", "dense1", "bn_dense", "embedding", "l2_norm")
                 )
 
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(1e-5),  # very low LR for fine-tuning
+        optimizer=tf.keras.optimizers.Adam(1e-5),  
         loss="categorical_crossentropy",
         metrics=["accuracy"],
     )
@@ -241,12 +201,10 @@ def train(args):
         ],
     )
 
-    # Save label mapping
     with open("models/student_labels.json", "w") as f:
         json.dump(label_names, f, indent=2)
     print(f"\n[INFO] ✓ Saved student_labels.json")
 
-    # Precompute and save embeddings for fast recognition
     save_encodings(model, args.data_dir, label_names)
 
     print("\n[INFO] ✓ Fine-tuning complete!")
